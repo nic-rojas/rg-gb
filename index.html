@@ -7,12 +7,18 @@
 
     <title>Rogue & Gambit</title>
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
     <div id="game">
+
+        <button id="music-toggle" aria-label="Toggle music">🔊</button>
 
         <!-- =====================================================
              PANTALLA 1 — INICIO
@@ -22,7 +28,11 @@
 
             <div class="top-text">X-MEN ARCADE</div>
 
-            <h1>ROGUE & GAMBIT</h1>
+            <h1>
+                <span class="title-rogue">ROGUE</span>
+                <span class="title-amp">&</span>
+                <span class="title-gambit">GAMBIT</span>
+            </h1>
 
             <div class="player">PLAYER 1</div>
 
@@ -127,23 +137,48 @@
                     <!-- DECORACIÓN DEL MAPA -->
 
                     <div class="map-building building-1">
-                        <span class="building-label">X</span>
+                        <div class="building-roof"></div>
+                        <div class="building-side"></div>
+                        <div class="building-front">
+                            <span class="building-label">X</span>
+                            <div class="building-door"></div>
+                        </div>
                     </div>
 
                     <div class="map-building building-2">
-                        <span class="building-label">BAR</span>
+                        <div class="building-roof"></div>
+                        <div class="building-side"></div>
+                        <div class="building-front">
+                            <span class="building-label">BAR</span>
+                            <div class="building-door"></div>
+                        </div>
                     </div>
 
                     <div class="map-building building-3">
-                        <span class="building-label">★</span>
+                        <div class="building-roof"></div>
+                        <div class="building-side"></div>
+                        <div class="building-front">
+                            <span class="building-label">★</span>
+                            <div class="building-door"></div>
+                        </div>
                     </div>
 
                     <div class="map-building building-4">
-                        <span class="building-label">INN</span>
+                        <div class="building-roof"></div>
+                        <div class="building-side"></div>
+                        <div class="building-front">
+                            <span class="building-label">INN</span>
+                            <div class="building-door"></div>
+                        </div>
                     </div>
 
                     <div class="map-building building-5">
-                        <span class="building-label">♣</span>
+                        <div class="building-roof"></div>
+                        <div class="building-side"></div>
+                        <div class="building-front">
+                            <span class="building-label">♣</span>
+                            <div class="building-door"></div>
+                        </div>
                     </div>
 
 
@@ -171,6 +206,15 @@
                     <div class="collectible card card-2">
                         ♦
                     </div>
+
+
+                    <!-- ENEMIGOS (evitar el contacto o Rogue pierde vidas) -->
+
+                    <div class="enemy enemy-1">✕</div>
+
+                    <div class="enemy enemy-2">✕</div>
+
+                    <div class="enemy enemy-3">✕</div>
 
 
                     <!-- GAMBIT -->
@@ -320,6 +364,35 @@
                 </div>
 
                 <button id="restart-button">
+                    PLAY AGAIN
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             PANTALLA 6 — GAME OVER (atrapada por los enemigos)
+        ====================================================== -->
+
+        <section id="gameover-screen" class="screen">
+
+            <div class="gameover-container">
+
+                <div id="gameover-icon">
+                    ☠
+                </div>
+
+                <div id="gameover-title">
+                    GAME OVER
+                </div>
+
+                <div id="gameover-text">
+                    THE SENTINELS CAUGHT UP WITH ROGUE.
+                </div>
+
+                <button id="gameover-restart-button">
                     PLAY AGAIN
                 </button>
 
