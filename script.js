@@ -11,6 +11,7 @@ const yesButton = document.getElementById("yes-button");
 const noButton = document.getElementById("no-button");
 const restartButton = document.getElementById("restart-button");
 const gameoverRestartButton = document.getElementById("gameover-restart-button");
+const musicToggle = document.getElementById("music-toggle");
 
 const rogue = document.getElementById("rogue");
 const gambit = document.getElementById("gambit");
@@ -34,6 +35,8 @@ let invulnerable = false;
 
 const MAX_LIVES = 3;
 let livesRemaining = MAX_LIVES;
+
+const SPAWN_SHIELD_MS = 1200;
 
 const speed = 4;
 
@@ -63,15 +66,15 @@ let dialogueIndex = 0;
 ============================================================ */
 
 const enemyStartPositions = [
-    { x: 360, y: 190 },
-    { x: 140, y: 300 },
-    { x: 600, y: 140 }
+    { x: 420, y: 230 },
+    { x: 260, y: 120 },
+    { x: 560, y: 340 }
 ];
 
 const enemyDirections = [
-    { vx: 1.8, vy: -1.3 },
-    { vx: -1.6, vy: 1.4 },
-    { vx: 1.4, vy: 1.6 }
+    { vx: 1.5, vy: -1.1 },
+    { vx: -1.3, vy: 1.2 },
+    { vx: 1.2, vy: 1.3 }
 ];
 
 const enemyState = Array.from(enemyElements).map(function(el, index) {
@@ -87,6 +90,175 @@ const enemyState = Array.from(enemyElements).map(function(el, index) {
         vx: dir.vx,
         vy: dir.vy
     };
+});
+
+/* ============================================================
+   MÚSICA — secuenciador techno con Web Audio API
+
+   No usa archivos de audio (evita temas de licencias); todo el
+   sonido se sintetiza en tiempo real: un kick con barrido de
+   frecuencia, un hi-hat de ruido filtrado, y una línea de bajo
+   en diente de sierra que arpegia un pequeño riff. Se usa un
+   "lookahead scheduler" (patrón estándar de Web Audio) para que
+   el tempo se mantenga estable aunque el hilo principal esté
+   ocupado con el juego.
+============================================================ */
+
+let audioCtx = null;
+let musicEnabled = true;
+let schedulerTimer = null;
+let currentStep = 0;
+let nextStepTime = 0;
+
+const BPM = 128;
+const STEP_SECONDS = 60 / BPM / 4; // dieciseisavos
+const SCHEDULE_AHEAD = 0.1;
+const SCHEDULER_INTERVAL_MS = 25;
+
+const KICK_STEPS = [0, 4, 8, 12];
+const HAT_STEPS = [2, 6, 10, 14];
+
+// Riff de bajo en La menor, 16 pasos (null = silencio)
+const BASS_PATTERN = [
+    110.00, null, 110.00, null,
+    130.81, null, 110.00, null,
+    98.00, null, 110.00, null,
+    130.81, null, 146.83, null
+];
+
+function ensureAudioContext() {
+    if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass();
+    }
+
+    if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+    }
+}
+
+function playKick(time) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(150, time);
+    osc.frequency.exponentialRampToValueAtTime(40, time + 0.15);
+
+    gain.gain.setValueAtTime(0.9, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start(time);
+    osc.stop(time + 0.18);
+}
+
+function playHat(time) {
+    const bufferSize = Math.floor(audioCtx.sampleRate * 0.05);
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.value = 7000;
+
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.18, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    noise.start(time);
+    noise.stop(time + 0.05);
+}
+
+function playBassNote(time, freq) {
+    const osc = audioCtx.createOscillator();
+    const filter = audioCtx.createBiquadFilter();
+    const gain = audioCtx.createGain();
+
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(freq, time);
+
+    filter.type = "lowpass";
+    filter.frequency.value = 900;
+
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.linearRampToValueAtTime(0.16, time + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.18);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start(time);
+    osc.stop(time + 0.2);
+}
+
+function scheduleStep(step, time) {
+    if (KICK_STEPS.indexOf(step) !== -1) {
+        playKick(time);
+    }
+
+    if (HAT_STEPS.indexOf(step) !== -1) {
+        playHat(time);
+    }
+
+    const note = BASS_PATTERN[step];
+
+    if (note) {
+        playBassNote(time, note);
+    }
+}
+
+function scheduler() {
+    while (nextStepTime < audioCtx.currentTime + SCHEDULE_AHEAD) {
+        scheduleStep(currentStep % 16, nextStepTime);
+        nextStepTime += STEP_SECONDS;
+        currentStep++;
+    }
+}
+
+function startMusic() {
+    if (!musicEnabled || schedulerTimer) {
+        return;
+    }
+
+    ensureAudioContext();
+
+    currentStep = 0;
+    nextStepTime = audioCtx.currentTime + 0.05;
+
+    schedulerTimer = setInterval(scheduler, SCHEDULER_INTERVAL_MS);
+}
+
+function stopMusic() {
+    if (schedulerTimer) {
+        clearInterval(schedulerTimer);
+        schedulerTimer = null;
+    }
+}
+
+musicToggle.addEventListener("click", function() {
+    musicEnabled = !musicEnabled;
+    musicToggle.textContent = musicEnabled ? "🔊" : "🔇";
+
+    if (musicEnabled) {
+        startMusic();
+    } else {
+        stopMusic();
+    }
 });
 
 function showScreen(screen) {
@@ -113,7 +285,6 @@ function resetGame() {
     gameStarted = true;
     gambitSpotted = false;
     isGameOver = false;
-    invulnerable = false;
     livesRemaining = MAX_LIVES;
 
     scoreElement.textContent = "000000";
@@ -128,7 +299,17 @@ function resetGame() {
     rogue.style.left = roguePosition.x + "px";
     rogue.style.bottom = roguePosition.y + "px";
 
-    rogue.classList.remove("hit", "invulnerable");
+    rogue.classList.remove("hit");
+
+    // Breve escudo al arrancar, para que un enemigo no pueda
+    // golpear a Rogue antes de que el jugador reaccione.
+    invulnerable = true;
+    rogue.classList.add("invulnerable");
+
+    setTimeout(function() {
+        invulnerable = false;
+        rogue.classList.remove("invulnerable");
+    }, SPAWN_SHIELD_MS);
 
     gambit.classList.remove("revealed");
 
@@ -154,6 +335,7 @@ function resetGame() {
 startButton.addEventListener("click", function() {
     showScreen(missionScreen);
     resetGame();
+    startMusic();
 });
 
 document.addEventListener("keydown", function(event) {
@@ -312,7 +494,7 @@ function checkCollectibles() {
 
             if (item.classList.contains("heart")) {
                 score += 100;
-                gameMessage.textContent = "HEART COLLECTED. +100";
+                gameMessage.textContent = "OH, YOU'RE GETTING CLOSE... +100";
             } else {
                 score += 250;
                 gameMessage.textContent = "CARD COLLECTED. +250";
@@ -397,6 +579,10 @@ function checkEnemyCollisions() {
 }
 
 function handleEnemyHit() {
+    if (missionComplete) {
+        return;
+    }
+
     livesRemaining -= 1;
     updateLivesDisplay();
 
@@ -427,7 +613,11 @@ function triggerGameOver() {
     gameMessage.textContent = "ROGUE IS DOWN...";
 
     setTimeout(function() {
-        showScreen(gameoverScreen);
+        // Si mientras tanto la misión se completó (encontró a
+        // Gambit), esa pantalla tiene prioridad: no la pisamos.
+        if (!missionComplete) {
+            showScreen(gameoverScreen);
+        }
     }, 800);
 }
 
@@ -480,6 +670,10 @@ function checkGambit() {
 }
 
 function completeMission() {
+    if (isGameOver) {
+        return;
+    }
+
     missionComplete = true;
 
     gambit.classList.add("revealed");
