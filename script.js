@@ -542,3 +542,205 @@ function updateEnemies() {
             enemy.vy *= -1;
             enemy.y = Math.max(0, Math.min(enemy.y, boundY));
         }
+
+        enemy.el.style.left = enemy.x + "px";
+        enemy.el.style.top = enemy.y + "px";
+    });
+}
+
+function checkEnemyCollisions() {
+    if (missionComplete || isGameOver || invulnerable) {
+        return;
+    }
+
+    const rogueRect = rogue.getBoundingClientRect();
+
+    const rogueCenterX = rogueRect.left + rogueRect.width / 2;
+    const rogueCenterY = rogueRect.top + rogueRect.height / 2;
+
+    enemyState.some(function(enemy) {
+        const enemyRect = enemy.el.getBoundingClientRect();
+
+        const enemyCenterX = enemyRect.left + enemyRect.width / 2;
+        const enemyCenterY = enemyRect.top + enemyRect.height / 2;
+
+        const distance = Math.hypot(
+            rogueCenterX - enemyCenterX,
+            rogueCenterY - enemyCenterY
+        );
+
+        if (distance < HIT_DISTANCE) {
+            handleEnemyHit();
+            return true;
+        }
+
+        return false;
+    });
+}
+
+function handleEnemyHit() {
+    if (missionComplete) {
+        return;
+    }
+
+    livesRemaining -= 1;
+    updateLivesDisplay();
+
+    invulnerable = true;
+    rogue.classList.add("hit");
+    rogue.classList.add("invulnerable");
+
+    setTimeout(function() {
+        rogue.classList.remove("hit");
+    }, HIT_FLASH_MS);
+
+    setTimeout(function() {
+        rogue.classList.remove("invulnerable");
+        invulnerable = false;
+    }, INVULNERABLE_MS);
+
+    if (livesRemaining <= 0) {
+        triggerGameOver();
+    } else {
+        gameMessage.textContent = "OUCH! ROGUE TOOK A HIT.";
+    }
+}
+
+function triggerGameOver() {
+    isGameOver = true;
+    gameStarted = false;
+
+    gameMessage.textContent = "ROGUE IS DOWN...";
+
+    setTimeout(function() {
+        // Si mientras tanto la misión se completó (encontró a
+        // Gambit), esa pantalla tiene prioridad: no la pisamos.
+        if (!missionComplete) {
+            showScreen(gameoverScreen);
+        }
+    }, 800);
+}
+
+/* ============================================================
+   GAMBIT ESCONDIDO
+
+   Gambit empieza casi invisible (ver .character-sprite en
+   style.css). A medida que Rogue se acerca dentro de
+   REVEAL_DISTANCE, gana la clase "revealed" y se desvanece
+   hacia su apariencia normal. Solo al llegar a CATCH_DISTANCE
+   se completa la misión.
+============================================================ */
+
+const REVEAL_DISTANCE = 160;
+const CATCH_DISTANCE = 55;
+
+function checkGambit() {
+    if (missionComplete) {
+        return;
+    }
+
+    const rogueRect = rogue.getBoundingClientRect();
+    const gambitRect = gambit.getBoundingClientRect();
+
+    const rogueCenterX = rogueRect.left + rogueRect.width / 2;
+    const rogueCenterY = rogueRect.top + rogueRect.height / 2;
+
+    const gambitCenterX = gambitRect.left + gambitRect.width / 2;
+    const gambitCenterY = gambitRect.top + gambitRect.height / 2;
+
+    const distance = Math.hypot(
+        rogueCenterX - gambitCenterX,
+        rogueCenterY - gambitCenterY
+    );
+
+    if (distance < REVEAL_DISTANCE) {
+        gambit.classList.add("revealed");
+
+        if (!gambitSpotted) {
+            gambitSpotted = true;
+            gameMessage.textContent = "YOU SENSE SOMEONE NEARBY...";
+        }
+    } else {
+        gambit.classList.remove("revealed");
+    }
+
+    if (distance < CATCH_DISTANCE) {
+        completeMission();
+    }
+}
+
+function completeMission() {
+    if (isGameOver) {
+        return;
+    }
+
+    missionComplete = true;
+
+    gambit.classList.add("revealed");
+
+    score += 1000;
+
+    scoreElement.textContent = String(score).padStart(6, "0");
+
+    missionStatus.textContent = "MISSION COMPLETE";
+    gameMessage.textContent = "GAMBIT FOUND. OBJECTIVE COMPLETE.";
+
+    setTimeout(function() {
+        startGambitScene();
+    }, 1500);
+}
+
+function startGambitScene() {
+    showScreen(gambitScreen);
+
+    dialogueIndex = 0;
+
+    dialogueText.textContent = dialogueLines[dialogueIndex];
+}
+
+dialogueNext.addEventListener("click", function() {
+    dialogueIndex++;
+
+    if (dialogueIndex < dialogueLines.length) {
+        dialogueText.textContent = dialogueLines[dialogueIndex];
+    } else {
+        showScreen(proposalScreen);
+    }
+});
+
+yesButton.addEventListener("click", function() {
+    document.getElementById("ending-icon").textContent = "♥";
+
+    document.getElementById("ending-title").textContent =
+        "MISSION COMPLETE";
+
+    document.getElementById("ending-text").textContent =
+        "YOU CHOSE GAMBIT. HE KNEW YOU WOULD.";
+
+    showScreen(endingScreen);
+});
+
+noButton.addEventListener("click", function() {
+    document.getElementById("ending-icon").textContent = "♦";
+
+    document.getElementById("ending-title").textContent =
+        "MISSION... FAILED?";
+
+    document.getElementById("ending-text").textContent =
+        "GAMBIT MAY TRY TO WIN YOUR HEART AGAIN.";
+
+    showScreen(endingScreen);
+});
+
+restartButton.addEventListener("click", function() {
+    gameStarted = false;
+    showScreen(startScreen);
+});
+
+gameoverRestartButton.addEventListener("click", function() {
+    gameStarted = false;
+    isGameOver = false;
+    showScreen(startScreen);
+});
+
+moveRogue();
